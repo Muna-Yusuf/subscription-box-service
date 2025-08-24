@@ -1,0 +1,25 @@
+{
+  "name": "subscription-box-service",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "^1.2.20",
+    "drizzle-kit": "^0.31.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.2",
+    "drizzle-orm": "^0.44.4",
+    "hono": "^4.9.4",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.1"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  }
+}
