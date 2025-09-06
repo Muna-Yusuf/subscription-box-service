@@ -8,6 +8,13 @@
       "when": 1756145636777,
       "tag": "0000_freezing_vin_gonzales",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1756583163753,
+      "tag": "0001_classy_jack_flag",
+      "breakpoints": true
     }
   ]
 }

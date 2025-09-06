@@ -6,6 +6,8 @@ const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:admi
 const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
 
+export const { users, products, subscriptions, fulfillmentCenters, inventory, orders, subscriptionPlans } = schema;
+
 export type InsertUser = typeof schema.users.$inferInsert;
 export type InsertProduct = typeof schema.products.$inferInsert;
 export type InsertFulfillmentCenter = typeof schema.fulfillmentCenters.$inferInsert;
