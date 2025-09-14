@@ -1,0 +1,16 @@
+# bunfig.toml
+root = "."
+
+[test]
+preload = "./tests/setup.ts"
+timeout = 30000
+
+[moduleAlias]
+"@src" = "./src"
+"@tests" = "./tests"
+"@db" = "./src/db/connection.ts"
+"@services" = "./src/services"
+"@config" = "./src/config"
+
+[dev]
+preload = ["./tests/setup.ts"]

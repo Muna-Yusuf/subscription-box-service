@@ -1,0 +1,30 @@
+{
+    admin off
+    debug
+}
+
+localhost {  
+    # TLS for development (self-signed, internal)
+    tls internal
+
+    # Reverse proxy API requests
+    reverse_proxy /api/* http://subscription-box-service-app-1:3000
+    reverse_proxy /auth/* http://subscription-box-service-app-1:3000
+    reverse_proxy /health http://subscription-box-service-app-1:3000
+
+    # Serve a simple welcome page at the root
+    @notApi {
+        not path /api/*
+        not path /health
+        not path /auth/*
+    }
+    handle @notApi {
+        respond "Subscription Box Service API is running! Use /api endpoints"
+    }
+    
+    # Logging
+    log {
+        output stdout
+        format json
+    }
+}
