@@ -42,6 +42,17 @@ export const verifyToken = (token: string): TokenPayload | null => {
   return getUserFromToken(token);
 };
 
+export const requireSameUserOrAdmin = async (c: any, next: any) => {
+  const user = c.get('user');
+  const targetUserId = parseInt(c.req.param('userId'));
+  
+  if (user.role !== 'admin' && user.userId !== targetUserId) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  
+  await next();
+};
+
 export const authMiddleware = (role?: 'admin' | 'user') => {
   return async (c: any, next: any) => {
     console.log('\n=== AUTH MIDDLEWARE CALLED ===');

@@ -1,4 +1,4 @@
-import { pgTable, uuid, serial, text, timestamp, integer, boolean, date, json, varchar, unique, jsonb} from 'drizzle-orm/pg-core';
+import { pgTable, uuid, serial, text, timestamp, integer, boolean, date, json, varchar, unique, jsonb } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { relations } from 'drizzle-orm';
@@ -14,12 +14,22 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+export const products = pgTable('products', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  price: integer('price').notNull(),
+  sku: varchar('sku', { length: 100 }).notNull().unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const subscriptionPlans = pgTable('subscription_plans', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
   description: text('description'),
   billingCycle: varchar('billing_cycle', { length: 20 }).notNull(),
   price: integer('price').notNull(),
+  productId: integer('product_id').notNull().references(() => products.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -32,15 +42,6 @@ export const subscriptions = pgTable('subscriptions', {
   nextBillingDate: date('next_billing_date').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-export const products = pgTable('products', {
-  id: serial('id').primaryKey(),
-  name: varchar('name', { length: 255 }).notNull(),
-  description: text('description'),
-  price: integer('price').notNull(),
-  sku: varchar('sku', { length: 100 }).notNull().unique(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 export const fulfillmentCenters = pgTable('fulfillment_centers', {
@@ -59,24 +60,36 @@ export const inventory = pgTable('inventory', {
   quantity: integer('quantity').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-}, (table) => {
-  return {
-    // Ensure we don't have duplicate product+center combinations
-    unqProductCenter: unique('unq_product_center').on(table.productId, table.fulfillmentCenterId),
-  };
-});
+}, (table) => ({
+  unqProductCenter: unique('unq_product_center').on(table.productId, table.fulfillmentCenterId),
+}));
 
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  subscriptionId: integer('subscription_id').notNull().references(() => subscriptions.id),
+  subscriptionId: integer('subscription_id').notNull().references(() => subscriptions.id, {
+    onDelete: 'cascade'
+  }),
+  userId: integer('user_id').notNull().references(() => users.id),
   productId: integer('product_id').notNull().references(() => products.id),
   fulfillmentCenterId: integer('fulfillment_center_id').references(() => fulfillmentCenters.id),
+  amount: integer('amount').notNull(),
   status: varchar('status', { length: 20 }).notNull().default('processed'),
-  orderDate: date('order_date').notNull().defaultNow(),
+  orderDate: timestamp('order_date').notNull().defaultNow(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-// Optional: Define relations if you're using Drizzle's relational queries
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  action: varchar('action', { length: 255 }).notNull(),
+  entity: varchar('entity', { length: 255 }).notNull(),
+  entityId: varchar('entity_id', { length: 255 }).notNull(),
+  userId: varchar('user_id', { length: 255 }),
+  details: jsonb('details'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   subscriptions: many(subscriptions),
 }));
@@ -119,7 +132,6 @@ export const ordersRelations = relations(orders, ({ one }) => ({
   }),
 }));
 
-// Insert Schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   firstName: true,
@@ -132,6 +144,7 @@ export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans
   description: true,
   billingCycle: true,
   price: true,
+  productId: true,
 });
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).pick({
@@ -162,23 +175,13 @@ export const insertInventorySchema = createInsertSchema(inventory).pick({
 
 export const insertOrderSchema = createInsertSchema(orders).pick({
   subscriptionId: true,
+  userId: true,
   productId: true,
   fulfillmentCenterId: true,
+  amount: true,
   status: true,
 });
 
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  action: varchar('action', { length: 255 }).notNull(),
-  entity: varchar('entity', { length: 255 }).notNull(),
-  entityId: varchar('entity_id', { length: 255 }).notNull(),
-  userId: varchar('user_id', { length: 255 }),
-  details: jsonb('details'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-// Types for TypeScript
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 

@@ -78,3 +78,6 @@ export class SubscriptionScheduler {
 
 // Always export a real object for API routes
 export const subscriptionScheduler = new SubscriptionScheduler();
+
+// Export QUEUE_NAMES from here as well for backward compatibility
+export { QUEUE_NAMES } from '../config/redis';

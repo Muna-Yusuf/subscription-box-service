@@ -22,6 +22,20 @@
       "when": 1757185553458,
       "tag": "0002_cynical_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1758053783303,
+      "tag": "0003_big_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1758298877655,
+      "tag": "0004_add_product_id_to_subscription_plans",
+      "breakpoints": true
     }
   ]
 }

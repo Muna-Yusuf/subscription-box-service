@@ -1,5 +1,5 @@
-import { db, inventory } from '../db/connection.ts';
-import { products, fulfillmentCenters } from '../db/schema.ts';
+import { db } from '../db/connection.ts';
+import { products, fulfillmentCenters, inventory } from '../db/schema.ts';
 import { and, eq, gt, sql } from 'drizzle-orm';
 
 export class InventoryService {
@@ -24,7 +24,6 @@ export class InventoryService {
   }
 
   async findNearestAvailableInventory(productId: number, userLat?: string, userLon?: string) {
-    // Simple implementation - in production, use proper geospatial queries
     const availableInventory = await db
       .select({
         inventoryId: inventory.id,
@@ -43,16 +42,20 @@ export class InventoryService {
       .orderBy(inventory.quantity); // Prioritize centers with more stock
 
     if (availableInventory.length === 0) {
-      throw new Error('Product out of stock at all fulfillment centers');
+      return null; // Return null instead of throwing
     }
 
     return availableInventory[0]; // Return first available
   }
 
   async reserveInventory(productId: number, quantity: number = 1) {
-    const availableInventory = await this.findNearestAvailableInventory(productId);
-    
     try {
+      const availableInventory = await this.findNearestAvailableInventory(productId);
+      
+      if (!availableInventory) {
+        return { success: false, message: 'Product out of stock at all fulfillment centers' };
+      }
+
       const result = await this.decrementInventory(productId, availableInventory.fulfillmentCenterId, quantity);
       return {
         success: true,
@@ -60,7 +63,7 @@ export class InventoryService {
         remainingQuantity: result.quantity,
       };
     } catch (error) {
-      // Try next available center
+      // Try other centers if the first one fails
       const otherCenters = await db
         .select({
           fulfillmentCenterId: inventory.fulfillmentCenterId,
@@ -69,8 +72,7 @@ export class InventoryService {
         .from(inventory)
         .where(and(
           eq(inventory.productId, productId),
-          gt(inventory.quantity, 0),
-          eq(inventory.fulfillmentCenterId, availableInventory.fulfillmentCenterId)
+          gt(inventory.quantity, 0)
         ))
         .orderBy(inventory.quantity);
 
@@ -89,6 +91,50 @@ export class InventoryService {
 
       return { success: false, message: 'Product out of stock at all centers' };
     }
+  }
+
+  async getInventoryStatus(productId: number) {
+    const inventoryStatus = await db
+      .select({
+        productId: inventory.productId,
+        fulfillmentCenterId: inventory.fulfillmentCenterId,
+        centerName: fulfillmentCenters.name,
+        quantity: inventory.quantity,
+      })
+      .from(inventory)
+      .where(eq(inventory.productId, productId))
+      .leftJoin(fulfillmentCenters, eq(inventory.fulfillmentCenterId, fulfillmentCenters.id));
+
+    return inventoryStatus;
+  }
+
+  async restockInventory(productId: number, fulfillmentCenterId: number, quantity: number) {
+    const [result] = await db
+      .update(inventory)
+      .set({ quantity: sql`${inventory.quantity} + ${quantity}` })
+      .where(and(
+        eq(inventory.productId, productId),
+        eq(inventory.fulfillmentCenterId, fulfillmentCenterId)
+      ))
+      .returning();
+
+    if (!result) {
+      // If inventory doesn't exist, create it
+      const [newInventory] = await db
+        .insert(inventory)
+        .values({
+          productId,
+          fulfillmentCenterId,
+          quantity,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+      
+      return newInventory;
+    }
+
+    return result;
   }
 }
 

@@ -3,13 +3,23 @@ import { db, subscriptions } from '../db/connection.ts';
 import { subscriptionPlans, users } from '../db/schema.ts';
 import { zValidator } from '@hono/zod-validator';
 import { authMiddleware } from '../middleware/auth.ts';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { subscriptionScheduler } from '../jobs/subscriptionScheduler';
 import { subscriptionService } from '../services/subscriptionService';
 
 const app = new Hono();
 
-// Specific routes should come before generic routes
+const requireSameUserOrAdmin = async (c: any, next: any) => {
+  const user = c.get('user');
+  const targetUserId = parseInt(c.req.param('userId'));
+  
+  if (user.role !== 'admin' && user.userId !== targetUserId) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  
+  await next();
+};
+
 app.post('/join', authMiddleware('user'), async (c) => {
   const { planId } = await c.req.json();
   const payload = c.get('user');
@@ -28,7 +38,12 @@ app.get('/me', authMiddleware('user'), async (c) => {
   return c.json(userSubs);
 });
 
-// Generic routes come after specific routes
+app.get('/user/:userId', authMiddleware(), requireSameUserOrAdmin, async (c) => {
+  const userId = Number(c.req.param('userId'));
+  const userSubs = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
+  return c.json(userSubs);
+});
+
 app.post('/', authMiddleware('admin'), async (c) => {
   const data = await c.req.json();
   const [sub] = await db.insert(subscriptions).values(data).returning();
@@ -41,16 +56,32 @@ app.get('/', authMiddleware('admin'), async (c) => {
   return c.json(allSubs);
 });
 
-app.get('/:id', authMiddleware('admin'), async (c) => {
+app.get('/:id', authMiddleware(), async (c) => {
   const id = Number(c.req.param('id'));
+  const payload = c.get('user');
+  
   const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
   if (!subscription) return c.json({ error: 'Subscription not found' }, 404);
+  
+  if (payload.role !== 'admin' && subscription.userId !== payload.userId) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  
   return c.json(subscription);
 });
 
-app.patch('/:id', authMiddleware('admin'), async (c) => {
+app.patch('/:id', authMiddleware(), async (c) => {
   const id = Number(c.req.param('id'));
+  const payload = c.get('user');
   const data = await c.req.json();
+  
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
+  if (!subscription) return c.json({ error: 'Subscription not found' }, 404);
+  
+  if (payload.role !== 'admin' && subscription.userId !== payload.userId) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  
   await db.update(subscriptions).set(data).where(eq(subscriptions.id, id));
   if (data.planId || data.nextBillingDate) {
     await subscriptionScheduler.updateSubscriptionSchedule(id);
@@ -62,11 +93,11 @@ app.delete('/:id', authMiddleware(), async (c) => {
   const id = Number(c.req.param('id'));
   const payload = c.get('user');
 
-  if (payload.role === 'user') {
-    const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
-    if (!subscription || subscription.userId !== payload.userId) {
-      return c.json({ error: 'Forbidden' }, 403);
-    }
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
+  if (!subscription) return c.json({ error: 'Subscription not found' }, 404);
+
+  if (payload.role === 'user' && subscription.userId !== payload.userId) {
+    return c.json({ error: 'Forbidden' }, 403);
   }
 
   await subscriptionScheduler.unscheduleSubscriptionJob(id);

@@ -17,3 +17,5 @@ export const QUEUE_NAMES = {
   PAYMENTS: 'payments', 
   NOTIFICATIONS: 'notifications',
 } as const;
+
+export type QueueName = keyof typeof QUEUE_NAMES;

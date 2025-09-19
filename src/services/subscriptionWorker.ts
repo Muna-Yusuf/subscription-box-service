@@ -8,6 +8,9 @@ import { eq } from 'drizzle-orm';
 
 const redisConnection = getRedisConnection();
 
+// Start the scheduler worker first
+const schedulerWorker = await schedulerService.startWorker();
+
 const subscriptionWorker = new Worker(
   QUEUE_NAMES.SUBSCRIPTIONS,
   async (job) => {
@@ -17,7 +20,16 @@ const subscriptionWorker = new Worker(
       console.log(`Processing subscription ${subscriptionId}`);
       const order = await orderService.processSubscriptionOrder(subscriptionId);
       console.log(`Successfully processed subscription ${subscriptionId}, order ${order.id}`);
-      await schedulerService.scheduleNextBilling(subscriptionId);
+      
+      // Get updated subscription to get next billing date
+      const [subscription] = await db.select()
+        .from(subscriptions)
+        .where(eq(subscriptions.id, subscriptionId));
+      
+      if (subscription) {
+        await schedulerService.scheduleNextBilling(subscriptionId, subscription.nextBillingDate);
+      }
+      
       return { success: true, orderId: order.id };
     } catch (error: any) {
       console.error(`Failed to process subscription ${subscriptionId}:`, error);
@@ -33,11 +45,11 @@ const subscriptionWorker = new Worker(
 
 subscriptionWorker.on('completed', job => console.log(`Job ${job.id} completed successfully`));
 subscriptionWorker.on('failed', (job, error) => console.error(`Job ${job?.id} failed:`, error));
-subscriptionWorker.on('error', error => console.error('Worker error:', error));
 
 const shutdown = async () => {
-  console.log('Shutting down worker gracefully...');
+  console.log('Shutting down workers gracefully...');
   await subscriptionWorker.close();
+  await schedulerWorker.close();
   await redisConnection.quit();
   process.exit(0);
 };
@@ -46,5 +58,4 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 console.log('Subscription worker started. Waiting for jobs...');
-schedulerService.startWorker();
 console.log('Scheduler worker started...');

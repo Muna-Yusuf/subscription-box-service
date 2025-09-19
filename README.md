@@ -64,6 +64,7 @@ docker-compose logs -f app
 # Access DB: localhost:5432 (Postgres: admin)
 # Access Redis: localhost:6379
 ```
+> **Note:** The admin account must be created directly in the database. The `/users` endpoint only creates regular user accounts. You can insert the admin manually using SQL or a database seeding script.
 
 ## API Endpoints
 

@@ -1,41 +1,49 @@
-import { afterAll, afterEach, beforeAll, beforeEach } from 'bun:test';
+// tests/setup.ts
+import { afterEach, beforeEach, vi } from 'vitest';
 import { db } from '../src/db/connection';
-import * as schema from '../src/db/schema';
+import { 
+  users, subscriptions, subscriptionPlans, products, 
+  fulfillmentCenters, inventory, orders, auditLogs 
+} from '../src/db/schema';
 
-// Global test setup
-beforeAll(async () => {
-  // Clear database before all tests
-  await Promise.all([
-    db.delete(schema.orders),
-    db.delete(schema.inventory),
-    db.delete(schema.subscriptions),
-    db.delete(schema.subscriptionPlans),
-    db.delete(schema.products),
-    db.delete(schema.fulfillmentCenters),
-    db.delete(schema.users),
-    db.delete(schema.auditLogs),
-  ]);
+// Mock all external dependencies
+vi.mock('../src/db/connection', () => ({
+  db: {
+    select: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    transaction: vi.fn(),
+  }
+}));
+
+vi.mock('../src/config/redis', () => ({
+  getRedisConnection: vi.fn(),
+  QUEUE_NAMES: {
+    SUBSCRIPTIONS: 'subscriptions',
+    NOTIFICATIONS: 'notifications'
+  }
+}));
+
+// Mock BullMQ
+vi.mock('bullmq', () => ({
+  Queue: vi.fn(),
+  Worker: vi.fn(),
+  QueueScheduler: vi.fn()
+}));
+
+// Mock drizzle-orm
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn(),
+  and: vi.fn(),
+  gt: vi.fn(),
+  sql: vi.fn().mockReturnValue('SQL_EXPRESSION')
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
-beforeEach(async () => {
-  // Reset database state before each test
-  await Promise.all([
-    db.delete(schema.orders),
-    db.delete(schema.inventory),
-    db.delete(schema.subscriptions),
-    db.delete(schema.subscriptionPlans),
-    db.delete(schema.products),
-    db.delete(schema.fulfillmentCenters),
-    db.delete(schema.users),
-    db.delete(schema.auditLogs),
-  ]);
-});
-
-afterEach(async () => {
-  // Clean up after each test
-});
-
-afterAll(async () => {
-  // Close database connection after all tests
-  await db.client.end();
+afterEach(() => {
+  vi.resetAllMocks();
 });
